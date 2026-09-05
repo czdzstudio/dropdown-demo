@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Smartphone,
   Monitor,
@@ -14,7 +14,8 @@ import {
   Sliders,
   Compass,
   Route,
-  ChevronRight
+  ChevronRight,
+  Maximize2
 } from 'lucide-react';
 import StationPicker from './components/StationPicker/StationPicker';
 import ThumbRadialPicker from './components/StationPicker/ThumbRadialPicker';
@@ -22,6 +23,14 @@ import BottomTrackPicker from './components/StationPicker/BottomTrackPicker';
 import { SHUINAN_STATIONS, TAIWAN_STATIONS, RECENT_SEARCHES } from './data/stations';
 
 export default function App() {
+  // Detect if running directly on a mobile device or small screen
+  const [isRealMobile, setIsRealMobile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
   // Current active route dataset (Default: User specified Shuinan transit line)
   const [routeDataset, setRouteDataset] = useState('shuinan'); // 'shuinan' | 'taiwan'
   const stations = routeDataset === 'shuinan' ? SHUINAN_STATIONS : TAIWAN_STATIONS;
@@ -36,14 +45,25 @@ export default function App() {
   // 'track' (風格 C: 捷運軌道路線直選)
   const [uiStyle, setUiStyle] = useState('sheet');
 
-  // Viewport mode: 'mobile' frame vs 'responsive' full width
-  const [viewMode, setViewMode] = useState('mobile');
+  // Viewport mode for desktop users:
+  // 'simulator' (電腦上模擬 iPhone 機框)
+  // 'native' (無邊框純淨手機全螢幕)
+  // 'desktop' (桌機寬版)
+  const [desktopViewMode, setDesktopViewMode] = useState('simulator');
 
   // Ergonomic thumb-reach visualization overlay toggle
   const [showThumbZone, setShowThumbZone] = useState(false);
 
   // Booking confirmed alert feedback
   const [booked, setBooked] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsRealMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleSwap = () => {
     setOrigin(destination);
@@ -67,12 +87,15 @@ export default function App() {
     setTimeout(() => setBooked(false), 3000);
   };
 
-  // Main station selection UI content
+  // Whether we are rendering in an artificial simulator frame container (desktop simulator only)
+  const isInsideSimulatorFrame = !isRealMobile && desktopViewMode === 'simulator';
+
+  // Core Station Selector UI Component
   const renderCoreUI = () => (
     <div className="relative flex flex-col min-h-full pb-8">
       {/* Thumb-zone overlay indicator */}
       {showThumbZone && (
-        <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden rounded-[40px]">
+        <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden rounded-3xl">
           <div className="absolute -bottom-24 -right-24 w-[460px] h-[460px] rounded-full border-4 border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center">
             <span className="text-xs font-bold text-emerald-800 bg-white/95 px-3 py-1 rounded-full shadow-sm">
               👍 舒適拇指自然觸控區 (Thumb Zone)
@@ -88,13 +111,13 @@ export default function App() {
 
       {/* Hero / Header within view */}
       <div className="pt-2 pb-3">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30">
               <Bus className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900 leading-tight">水湳智慧交通接駁</h2>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">水湳智慧交通接駁</h2>
               <p className="text-[11px] text-slate-500">支援 2~12 字繁體長短站名排版</p>
             </div>
           </div>
@@ -112,9 +135,20 @@ export default function App() {
 
         {/* Style Selector Tabs (風格 A / B / C) */}
         <div className="mb-3">
-          <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-            <Sliders className="w-3 h-3 text-blue-600" />
-            <span>切換單手操作模式風格：</span>
+          <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Sliders className="w-3 h-3 text-blue-600" />
+              <span>切換單手操作模式風格：</span>
+            </span>
+            {isRealMobile && (
+              <button
+                type="button"
+                onClick={() => setShowThumbZone(!showThumbZone)}
+                className="text-[10px] text-emerald-700 font-medium px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200"
+              >
+                拇指熱區: {showThumbZone ? '開' : '關'}
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-1 bg-slate-200/70 p-1 rounded-xl">
             <button
@@ -162,7 +196,7 @@ export default function App() {
             onChangeOrigin={setOrigin}
             onChangeDestination={setDestination}
             onSwap={handleSwap}
-            forceMobile={viewMode === 'mobile'}
+            forceMobile={isInsideSimulatorFrame}
           />
         )}
 
@@ -266,6 +300,16 @@ export default function App() {
     </div>
   );
 
+  // 1. If on an actual mobile device, render natively without outer dark desktop chrome
+  if (isRealMobile) {
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans px-4 pt-3 pb-8 safe-bottom">
+        {renderCoreUI()}
+      </div>
+    );
+  }
+
+  // 2. If on desktop, render with mode toolbar (Simulator / Native Clean Mobile / Desktop Responsive)
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Navbar & Viewport Mode Switcher */}
@@ -281,14 +325,14 @@ export default function App() {
               </h1>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block mt-0.5">
-              針對手機單手操作（拇指觸控區）與 2~12 個繁體中文字彈性排版深度優化
+              手機打開自動切換純淨全螢幕；電腦上可切換模擬框或桌機寬版
             </p>
           </div>
 
-          {/* Controls toolbar */}
+          {/* Desktop controls toolbar */}
           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
             {/* Thumb-zone toggle */}
-            {viewMode === 'mobile' && (
+            {desktopViewMode !== 'desktop' && (
               <button
                 type="button"
                 onClick={() => setShowThumbZone(!showThumbZone)}
@@ -307,28 +351,41 @@ export default function App() {
             <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700/80">
               <button
                 type="button"
-                onClick={() => setViewMode('mobile')}
+                onClick={() => setDesktopViewMode('simulator')}
                 className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                  viewMode === 'mobile'
+                  desktopViewMode === 'simulator'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>手機實機模擬</span>
+                <span>手機外框模擬</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setViewMode('responsive')}
+                onClick={() => setDesktopViewMode('native')}
                 className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                  viewMode === 'responsive'
+                  desktopViewMode === 'native'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span>純淨手機全螢幕</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDesktopViewMode('desktop')}
+                className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  desktopViewMode === 'desktop'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Monitor className="w-3.5 h-3.5" />
-                <span>桌機 / 響應式</span>
+                <span>桌機寬版</span>
               </button>
             </div>
           </div>
@@ -337,24 +394,25 @@ export default function App() {
 
       {/* Main Content Showcase */}
       <main className="flex-1 flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
-        {viewMode === 'mobile' ? (
-          /* Mobile Device Frame (iPhone 15 shape) */
+        {desktopViewMode === 'simulator' ? (
+          /* Phone Frame Simulator */
           <div className="relative w-full max-w-[390px] h-[780px] max-h-[85vh] bg-slate-900 rounded-[50px] p-3 shadow-2xl border-[6px] border-slate-700 ring-1 ring-white/10 flex flex-col">
-            {/* Dynamic Island / Speaker */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-40 flex items-center justify-end px-3">
               <div className="w-2.5 h-2.5 rounded-full bg-slate-950 border border-slate-800 ring-1 ring-blue-900/40" />
             </div>
 
-            {/* Inner Phone Screen */}
             <div className="relative flex-1 bg-slate-50 text-slate-800 rounded-[40px] pt-8 px-4 pb-4 overflow-y-auto no-scrollbar flex flex-col">
               {renderCoreUI()}
-
-              {/* Home indicator bar at bottom */}
               <div className="w-32 h-1 bg-slate-300 rounded-full mx-auto mt-auto pt-0.5 flex-shrink-0" />
             </div>
           </div>
+        ) : desktopViewMode === 'native' ? (
+          /* Native Clean Mobile Container (No bezel) */
+          <div className="w-full max-w-[420px] min-h-[700px] bg-slate-50 text-slate-800 rounded-3xl p-5 shadow-2xl border border-slate-200/80">
+            {renderCoreUI()}
+          </div>
         ) : (
-          /* Responsive Desktop / Tablet Layout */
+          /* Responsive Desktop Layout */
           <div className="w-full max-w-2xl bg-white text-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-200/80">
             {renderCoreUI()}
           </div>
@@ -364,7 +422,7 @@ export default function App() {
         <div className="mt-4 max-w-2xl text-center text-xs text-slate-400 space-y-1">
           <p className="flex items-center justify-center gap-1 font-medium text-slate-300">
             <Info className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-            支援 3 種單手友善模式（A. 底部抽屜 / B. 扇形弧選 / C. 軌道直選），可隨時點擊切換比較！
+            用手機開啟時，會自動切換為 100% 滿版原生手機操作體驗！
           </p>
         </div>
       </main>
